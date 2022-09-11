@@ -1,0 +1,60 @@
+Protect the Docker daemon socket
+================================
+By default,Docker run through a non-networked UNIX socket.Docker daemon can be comminucated via SSH or TLS (HTTPS).
+
+TLS (HTTPS) Docker daemon socket communication
+==============================================
+Generate Server Certificates
+----------------------------
+
+1. Creating CA (Certificate Authority),server and client keys using Openssl
+
+- Running below command on Docker daemon Host,generate CA private and public key
+    - Set HOST environment variable with DNS name of Docker daemon's host.
+      $ export HOST="dockerd"
+$ sudo openssl genrsa -aes256 -out ca-key.pem 4096
+$ sudo openssl req -new -x509 -days 365 -key ca-key.pem -sha256 -out ca.pem
+
+
+2. Create Server key and Certificate Signing Request (CSR).
+
+$ sudo openssl genrsa -out server-key.pem 4096
+$ sudo openssl req -subj "/CN=$HOST" -sha256 -new -key server-key.pem -out server.csr
+
+
+3. Sign Public key with CA
+
+- TLS connections can be made through IP address and DNS name
+$ echo "subjectAltName = DNS:$HOST,IP:10.10.10.20,IP:127.0.0.1" >> extfile.cnf
+$ echo "extendedKeyUsage = serverAuth" >> extfile.cnf
+$ sudo openssl x509 -req -days 365 -sha256 -in server.csr -CA ca.pem -CAkey ca-key.pem \
+  -CAcreateserial -out server-cert.pem -extfile extfile.cnf
+
+Generate Client Certificates
+----------------------------
+$ sudo openssl genrsa -out key.pem 4096
+$ sudo openssl req -subj '/CN=client' -new -key key.pem -out client.csr
+$ echo "extendedKeyUsage = clientAuth" > extfile-client.cnf
+$ sudo openssl x509 -req -days 365 -sha256 -in client.csr -CA ca.pem -CAkey ca-key.pem \
+  -CAcreateserial -out cert.pem -extfile extfile-client.cnf
+
+
+Certificate Permissions
+-----------------------
+- Remove unwanted files
+  $ rm -v server.csr extfile.cnf client.csr extfile-client.cnf
+- Change Certificates Permissions
+  $ chmod -v 0400 ca-key.pem  key.pem server-key.pem
+  $ chmod -v 0400 ca.pem server-cert.pem cert.pem
+
+- Running Docker Daemon
+$ sduo dockerd --tlsverify --tlscacert=ca.pem --tlscert=server-cert.pem --tlskey=server-key.pem -H=0.0.0.0:2376
+
+Setup Docker Client
+===================
+- Copying Server public certificate and Client public certificate and key
+$ mkdir -pv ~/.docker
+$ cp -v ca.pem cert.pem key.pem  ~/.docker
+
+- Export Docker Host and Docker TLS Verification
+$ export DOCKER_HOST=tcp://dockerd:2376 DOCKER_TLS_VERIFY=1
