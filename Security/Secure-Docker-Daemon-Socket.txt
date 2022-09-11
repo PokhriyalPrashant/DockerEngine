@@ -50,6 +50,21 @@ Certificate Permissions
 - Running Docker Daemon
 $ sduo dockerd --tlsverify --tlscacert=ca.pem --tlscert=server-cert.pem --tlskey=server-key.pem -H=0.0.0.0:2376
 
+OR
+
+- Create file /etc/docker/daemon.json
+{
+    "debug": true,
+    "hosts": ["tcp://0.0.0.0:2376"]
+    "tlsverify": true,
+    "tlscacert": "ca.pem",
+    "tlscert": "server-cert.pem",
+    "tlskey": "server-key.pem"
+}
+
+$ sudo dockerd
+
+
 Setup Docker Client
 ===================
 - Copying Server public certificate and Client public certificate and key
